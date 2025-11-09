@@ -7,9 +7,9 @@ import { cache } from 'react';
 const FINNHUB_BASE_URL = 'https://finnhub.io/api/v1';
 const NEXT_PUBLIC_FINNHUB_API_KEY = process.env.NEXT_PUBLIC_FINNHUB_API_KEY ?? '';
 
-async function fetchJSON<T>(url: string, revalidateSeconds?: number): Promise<T> {
-    const options: RequestInit & { next?: { revalidate?: number } } = revalidateSeconds
-        ? { cache: 'force-cache', next: { revalidate: revalidateSeconds } }
+async function fetchJSON<T>(url: string, revalidateSeconds?: number, tags?: string[]): Promise<T> {
+    const options: RequestInit & { next?: { revalidate?: number; tags?: string[] } } = revalidateSeconds
+        ? { cache: 'force-cache', next: { revalidate: revalidateSeconds, ...(tags ? { tags } : {}) } }
         : { cache: 'no-store' };
 
     const res = await fetch(url, options);
@@ -43,7 +43,7 @@ export async function getNews(symbols?: string[]): Promise<MarketNewsArticle[]> 
                 cleanSymbols.map(async (sym) => {
                     try {
                         const url = `${FINNHUB_BASE_URL}/company-news?symbol=${encodeURIComponent(sym)}&from=${range.from}&to=${range.to}&token=${token}`;
-                        const articles = await fetchJSON<RawNewsArticle[]>(url, 300);
+                        const articles = await fetchJSON<RawNewsArticle[]>(url, 300, ['news', `news:${sym}`]);
                         perSymbolArticles[sym] = (articles || []).filter(validateArticle);
                     } catch (e) {
                         console.error('Error fetching company news for', sym, e);
@@ -77,7 +77,7 @@ export async function getNews(symbols?: string[]): Promise<MarketNewsArticle[]> 
 
         // General market news fallback or when no symbols provided
         const generalUrl = `${FINNHUB_BASE_URL}/news?category=general&token=${token}`;
-        const general = await fetchJSON<RawNewsArticle[]>(generalUrl, 300);
+        const general = await fetchJSON<RawNewsArticle[]>(generalUrl, 300, ['news']);
 
         const seen = new Set<string>();
         const unique: RawNewsArticle[] = [];
@@ -149,7 +149,7 @@ export const searchStocks = cache(async (query?: string): Promise<StockWithWatch
                 .filter((x): x is FinnhubSearchResult => Boolean(x));
         } else {
             const url = `${FINNHUB_BASE_URL}/search?q=${encodeURIComponent(trimmed)}&token=${token}`;
-            const data = await fetchJSON<FinnhubSearchResponse>(url, 1800);
+            const data = await fetchJSON<FinnhubSearchResponse>(url, 1800, ['search', `search:${trimmed}`]);
             results = Array.isArray(data?.result) ? data.result : [];
         }
 
